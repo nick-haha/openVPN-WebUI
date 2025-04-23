@@ -20,7 +20,6 @@
 ├── static/
 │   ├── index.html          # 首页（用户配置管理）
 │   └── login.html          # 登录页面（如有身份验证功能）
-```bash
 
 ---
 
