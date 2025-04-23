@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenVPN WebUI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f7fa;
+            animation: fadeInPage 0.8s ease-out;
+        }
+        @keyframes fadeInPage {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .navbar {
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .avatar-icon {
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            font-size: 18px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .avatar-icon:hover {
+            transform: scale(1.1);
+        }
+        .dashboard-card {
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+        .dashboard-card .card-body {
+            width: 100%;
+            text-align: center;
+        }
+        .dashboard-card .card-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        #logContent {
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #connectionsTable:empty::before {
+            content: "暂无连接数据";
+            display: block;
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+        .btn {
+            transition: background 0.3s, transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .nav-tabs .nav-link {
+            transition: color 0.3s, background 0.3s;
+        }
+        .nav-tabs .nav-link:hover {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">OpenVPN WebUI</a>
+            <div class="navbar-nav ms-auto">
+                <div class="dropdown">
+                    <i class="fas fa-user avatar-icon" data-bs-toggle="dropdown" aria-expanded="false"></i>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="showChangePasswordModal()">修改密码</a></li>
+                        <li><a class="dropdown-item" href="/logout">退出</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link active" href="#dashboard" data-bs-toggle="tab">仪表盘</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#vpn_users" data-bs-toggle="tab">VPN 用户管理</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#config" data-bs-toggle="tab">配置文件</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#logs" data-bs-toggle="tab">日志查看</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#connections" data-bs-toggle="tab">用户连接状态</a>
+            </li>
+        </ul>
+
+        <div class="tab-content mt-3">
+            <div class="tab-pane active" id="dashboard">
+                <h3>仪表盘</h3>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card text-center dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title">用户总数</h5>
+                                <p class="card-text" id="totalUsers">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title">已连接用户</h5>
+                                <p class="card-text" id="connectedUsers">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title">服务器状态</h5>
+                                <p class="card-text" id="serverStatus">未知</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center dashboard-card">
+                            <div class="card-body">
+                                <h5 class="card-title">网卡流量</h5>
+                                <p class="card-text" id="networkTraffic">接收: 0 Mb<br>发送: 0 Mb</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">网卡流量趋势 (Mb/s)</h5>
+                                <div class="mb-3">
+                                    <label class="form-label">时间范围</label>
+                                    <div class="input-group">
+                                        <input type="datetime-local" class="form-control" id="trafficStartTime" step="60">
+                                        <span class="input-group-text">至</span>
+                                        <input type="datetime-local" class="form-control" id="trafficEndTime" step="60">
+                                    </div>
+                                    <button class="btn btn-primary mt-2 me-2" onclick="fetchTrafficData()">筛选</button>
+                                    <button class="btn btn-secondary mt-2" onclick="resetTrafficData()">刷新</button>
+                                </div>
+                                <canvas id="trafficChart" height="100"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane" id="vpn_users">
+                <h3>VPN 用户管理</h3>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="vpnUserSearch" placeholder="搜索用户名" oninput="fetchVpnUsers()">
+                    <button class="btn btn-primary" onclick="fetchVpnUsers()">搜索</button>
+                </div>
+                <button class="btn btn-primary mb-3" onclick="showAddVpnUserModal()">添加 VPN 用户</button>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>编号</th>
+                            <th>用户名</th>
+                            <th>配置文件</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vpnUsersTable"></tbody>
+                </table>
+            </div>
+
+            <div class="tab-pane" id="config">
+                <h3>配置文件管理</h3>
+                <div class="mb-3">
+                    <label class="form-label">OpenVPN 安装路径</label>
+                    <input type="text" class="form-control" id="openvpnPath" value="/etc/openvpn/" oninput="fetchConfigFiles()">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">选择配置文件</label>
+                    <select class="form-select" id="configFileSelect" onchange="fetchConfig()">
+                        <option value="">-- 请选择配置文件 --</option>
+                    </select>
+                </div>
+                <div id="configError" class="alert alert-danger d-none"></div>
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" id="configEditSwitch" onchange="toggleConfigEdit()">
+                    <label class="form-check-label" for="configEditSwitch">编辑模式</label>
+                </div>
+                <textarea id="configContent" class="form-control mt-2" rows="20" placeholder="选择配置文件后显示内容" disabled></textarea>
+                <button class="btn btn-danger mt-3" onclick="saveConfig()">保存配置并重启</button>
+            </div>
+
+            <div class="tab-pane" id="logs">
+                <h3>日志查看</h3>
+                <div class="mb-3">
+                    <label class="form-label">选择日志文件</label>
+                    <select class="form-select" id="logFileSelect" onchange="fetchLogs()">
+                        <option value="">-- 请选择日志文件 --</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">时间范围</label>
+                    <div class="input-group">
+                        <input type="datetime-local" class="form-control" id="startTime" step="60">
+                        <span class="input-group-text">至</span>
+                        <input type="datetime-local" class="form-control" id="endTime" step="60">
+                    </div>
+                    <button class="btn btn-primary mt-2" onclick="fetchLogs()">筛选日志</button>
+                </div>
+                <pre id="logContent" class="border p-3"></pre>
+            </div>
+
+            <div class="tab-pane" id="connections">
+                <h3>连接状态</h3>
+                <div class="mb-3">
+                    <label class="form-label">自动刷新间隔</label>
+                    <select class="form-select w-auto d-inline-block" id="refreshInterval" onchange="setRefreshInterval()">
+                        <option value="0">关闭</option>
+                        <option value="5000">5秒</option>
+                        <option value="10000">10秒</option>
+                        <option value="30000">30秒</option>
+                    </select>
+                    <button class="btn btn-primary ms-2" onclick="fetchConnections()">立即刷新</button>
+                </div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>用户名</th>
+                            <th>真实IP</th>
+                            <th>虚拟IP</th>
+                            <th>上线时间</th>
+                            <th>连接时长</th>
+                            <th>接收流量</th>
+                            <th>发送流量</th>
+                        </tr>
+                    </thead>
+                    <tbody id="connectionsTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加 VPN 用户模态框 -->
+    <div class="modal fade" id="addVpnUserModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">添加 VPN 用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="newVpnUsername">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="addVpnUser()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 备份 VPN 用户模态框 -->
+    <div class="modal fade" id="backupVpnUserModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">备份 VPN 用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="backupVpnUsername" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备份内容</label>
+                        <textarea class="form-control" id="backupContent" rows="5" placeholder="请输入备份内容（如备注或描述）"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="backupVpnUser()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑 VPN 用户配置文件模态框 -->
+    <div class="modal fade" id="editVpnUserModal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑 VPN 用户配置文件</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="editVpnUsername" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">配置文件内容</label>
+                        <textarea class="form-control" id="editVpnContent" rows="15"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="saveVpnUserConfig()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div class="modal fade" id="changePasswordModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">修改密码</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">旧密码</label>
+                        <input type="password" class="form-control" id="oldPassword">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新密码</label>
+                        <input type="password" class="form-control" id="newPassword">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">确认新密码</label>
+                        <input type="password" class="form-control" id="confirmPassword">
+                    </div>
+                    <div id="passwordError" class="text-danger"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="changePassword()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        let trafficChart;
+        let refreshIntervalId = null;
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        async function fetchTrafficData() {
+            const startTime = document.getElementById('trafficStartTime').value;
+            const endTime = document.getElementById('trafficEndTime').value;
+            if (startTime && endTime && new Date(startTime) > new Date(endTime)) {
+                alert('开始时间不能晚于结束时间');
+                return;
+            }
+            let url = '/api/dashboard';
+            if (startTime || endTime) {
+                url += '?';
+                if (startTime) url += `start_time=${encodeURIComponent(startTime)}`;
+                if (endTime) url += `${startTime ? '&' : ''}end_time=${encodeURIComponent(endTime)}`;
+            }
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data.status === 'success') {
+                updateTrafficChart(data.traffic_history);
+            } else {
+                alert(`加载流量数据失败：${data.message}`);
+            }
+        }
+
+        function resetTrafficData() {
+            document.getElementById('trafficStartTime').value = '';
+            document.getElementById('trafficEndTime').value = '';
+            fetchTrafficData();
+        }
+
+        function updateTrafficChart(trafficHistory) {
+            if (trafficChart) {
+                trafficChart.data.labels = trafficHistory.timestamps.map(t => new Date(t * 1000).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+                trafficChart.data.datasets[0].data = trafficHistory.rx_rates;
+                trafficChart.data.datasets[1].data = trafficHistory.tx_rates;
+                trafficChart.update();
+            } else {
+                trafficChart = new Chart(document.getElementById('trafficChart'), {
+                    type: 'line',
+                    data: {
+                        labels: trafficHistory.timestamps.map(t => new Date(t * 1000).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })),
+                        datasets: [
+                            {
+                                label: '接收 (Mb/s)',
+                                data: trafficHistory.rx_rates,
+                                borderColor: 'red',
+                                fill: false
+                            },
+                            {
+                                label: '发送 (Mb/s)',
+                                data: trafficHistory.tx_rates,
+                                borderColor: 'green',
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: { title: { display: true, text: '时间' } },
+                            y: { title: { display: true, text: '流量 (Mb/s)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        }
+
+        async function fetchDashboard() {
+            const response = await fetch('/api/dashboard');
+            const data = await response.json();
+            if (data.status === 'success') {
+                document.getElementById('totalUsers').textContent = data.total_users;
+                document.getElementById('connectedUsers').textContent = data.connected_users;
+                document.getElementById('serverStatus').textContent = data.server_status === 'running' ? '运行中' : '异常';
+                document.getElementById('serverStatus').className = data.server_status === 'running' ? 'card-text text-success' : 'card-text text-danger';
+                document.getElementById('networkTraffic').innerHTML = 
+                    `接收: ${data.network_traffic.rx_mb >= 0 ? data.network_traffic.rx_mb.toFixed(2) : 'N/A'} Mb<br>` +
+                    `发送: ${data.network_traffic.tx_mb >= 0 ? data.network_traffic.tx_mb.toFixed(2) : 'N/A'} Mb`;
+                
+                if (!document.getElementById('trafficStartTime').value && !document.getElementById('trafficEndTime').value) {
+                    updateTrafficChart(data.traffic_history);
+                }
+            } else {
+                alert(`仪表盘加载失败：${data.message}`);
+            }
+        }
+
+        async function fetchVpnUsers() {
+            const search = document.getElementById('vpnUserSearch').value;
+            const response = await fetch(`/api/vpn_users?search=${encodeURIComponent(search)}`);
+            if (response.status === 403) {
+                document.getElementById('vpnUsersTable').innerHTML = '<tr><td colspan="5">无权限访问</td></tr>';
+                return;
+            }
+            const vpnUsers = await response.json();
+            const table = document.getElementById('vpnUsersTable');
+            table.innerHTML = vpnUsers.map(u => `
+                <tr>
+                    <td>${u.id}</td>
+                    <td>${u.username}</td>
+                    <td><a href="/api/vpn_users/download/${u.username}">${u.ovpn_file}</a></td>
+                    <td>${new Date(u.created_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="showEditVpnUserModal('${u.username}')">编辑</button>
+                        <a href="/api/vpn_users/download/${u.username}" class="btn btn-sm btn-success">导出</a>
+                        <button class="btn btn-sm btn-info" onclick="showBackupVpnUserModal('${u.username}')">备份</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteVpnUser('${u.username}')">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function deleteVpnUser(username) {
+            if (!confirm(`确认删除 VPN 用户 ${username}？`)) return;
+            const response = await fetch('/api/vpn_users', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const result = await response.json();
+            alert(result.status === 'success' ? '删除成功' : `删除失败：${result.message}`);
+            fetchVpnUsers();
+        }
+
+        async function backupVpnUser() {
+            const username = document.getElementById('backupVpnUsername').value;
+            const backupContent = document.getElementById('backupContent').value;
+            const response = await fetch('/api/vpn_users/backup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, backup_content: backupContent })
+            });
+            const result = await response.json();
+            alert(result.status === 'success' ? `备份成功：${result.backup_path}` : `备份失败：${result.message}`);
+            bootstrap.Modal.getInstance(document.getElementById('backupVpnUserModal')).hide();
+        }
+
+        async function fetchConfigFiles() {
+            const baseDir = document.getElementById('openvpnPath').value;
+            const response = await fetch(`/api/config/files?base_dir=${encodeURIComponent(baseDir)}`);
+            const data = await response.json();
+            const select = document.getElementById('configFileSelect');
+            select.innerHTML = '<option value="">-- 请选择配置文件 --</option>';
+            if (data.status === 'success') {
+                data.files.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file;
+                    option.textContent = file;
+                    select.appendChild(option);
+                });
+            } else {
+                document.getElementById('configError').className = 'alert alert-danger';
+                document.getElementById('configError').textContent = data.message;
+                document.getElementById('configError').classList.remove('d-none');
+            }
+        }
+
+        async function fetchConfig() {
+            const configFile = document.getElementById('configFileSelect').value;
+            const errorDiv = document.getElementById('configError');
+            const contentArea = document.getElementById('configContent');
+            const editSwitch = document.getElementById('configEditSwitch');
+            errorDiv.classList.add('d-none');
+            contentArea.value = '';
+            contentArea.disabled = true;
+            editSwitch.checked = false;
+
+            if (!configFile) {
+                contentArea.placeholder = '请先选择配置文件';
+                return;
+            }
+
+            const response = await fetch(`/api/config?file=${encodeURIComponent(configFile)}`);
+            const data = await response.json();
+            if (data.status === 'success') {
+                contentArea.value = data.content;
+                contentArea.placeholder = `正在查看：${configFile}`;
+            } else {
+                errorDiv.className = 'alert alert-danger';
+                errorDiv.textContent = data.message;
+                errorDiv.classList.remove('d-none');
+                contentArea.placeholder = '无法加载配置文件';
+            }
+        }
+
+        function toggleConfigEdit() {
+            const contentArea = document.getElementById('configContent');
+            const editSwitch = document.getElementById('configEditSwitch');
+            if (editSwitch.checked && contentArea.value) {
+                contentArea.disabled = false;
+                contentArea.focus();
+            } else {
+                contentArea.disabled = true;
+            }
+        }
+
+        async function saveConfig() {
+            const configFile = document.getElementById('configFileSelect').value;
+            const content = document.getElementById('configContent').value;
+            const editSwitch = document.getElementById('configEditSwitch');
+            if (!configFile) {
+                alert('请先选择配置文件');
+                return;
+            }
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content, file: configFile })
+            });
+            const result = await response.json();
+            alert(result.status === 'success' ? '保存并重启成功' : `保存失败：${result.message}`);
+            if (result.status === 'success') {
+                document.getElementById('configContent').disabled = true;
+                editSwitch.checked = false;
+            }
+        }
+
+        async function fetchLogFiles() {
+            const response = await fetch('/api/log_files');
+            const data = await response.json();
+            const select = document.getElementById('logFileSelect');
+            select.innerHTML = '<option value="">-- 请选择日志文件 --</option>';
+            if (data.status === 'success') {
+                data.files.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file;
+                    option.textContent = file;
+                    select.appendChild(option);
+                });
+            }
+        }
+
+        async function fetchLogs() {
+            const logFile = document.getElementById('logFileSelect').value;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            if (startTime && endTime && new Date(startTime) > new Date(endTime)) {
+                alert('开始时间不能晚于结束时间');
+                return;
+            }
+            let url = `/api/logs?log_file=${encodeURIComponent(logFile)}`;
+            if (startTime) url += `&start_time=${encodeURIComponent(startTime)}`;
+            if (endTime) url += `&end_time=${encodeURIComponent(endTime)}`;
+            
+            const response = await fetch(url);
+            const data = await response.json();
+            const logContent = document.getElementById('logContent');
+            if (data.status === 'success') {
+                logContent.textContent = data.logs;
+            } else {
+                logContent.textContent = `错误：${data.message}`;
+            }
+        }
+
+        async function fetchConnections() {
+            const table = document.getElementById('connectionsTable');
+            const connectedUsers = document.getElementById('connectedUsers');
+            let tempTable = document.createElement('tbody');
+            
+            try {
+                const response = await fetch('/api/connections');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    tempTable.innerHTML = data.connections.length === 0
+                        ? '<tr><td colspan="7" class="text-center">暂无连接用户</td></tr>'
+                        : data.connections.map(c => `
+                            <tr>
+                                <td>${c.username}</td>
+                                <td>${c.real_ip}</td>
+                                <td>${c.virtual_ip}</td>
+                                <td>${c.start_time}</td>
+                                <td>${c.duration}</td>
+                                <td>${formatBytes(c.bytes_received)}</td>
+                                <td>${formatBytes(c.bytes_sent)}</td>
+                            </tr>
+                        `).join('');
+                    table.innerHTML = tempTable.innerHTML;
+                    connectedUsers.textContent = data.connections.length;
+                } else {
+                    tempTable.innerHTML = '<tr><td colspan="7" class="text-center">无法加载连接数据</td></tr>';
+                    table.innerHTML = tempTable.innerHTML;
+                    alert(`加载连接数据失败：${data.message}`);
+                }
+            } catch (e) {
+                tempTable.innerHTML = '<tr><td colspan="7" class="text-center">无法加载连接数据</td></tr>';
+                table.innerHTML = tempTable.innerHTML;
+                alert(`请求失败：${e.message}`);
+            }
+        }
+
+        function setRefreshInterval() {
+            if (refreshIntervalId) {
+                clearInterval(refreshIntervalId);
+                refreshIntervalId = null;
+            }
+            const interval = parseInt(document.getElementById('refreshInterval').value);
+            if (interval > 0) {
+                refreshIntervalId = setInterval(fetchConnections, interval);
+            }
+        }
+
+        async function addVpnUser() {
+            const username = document.getElementById('newVpnUsername').value;
+            const response = await fetch('/api/vpn_users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const result = await response.json();
+            alert(result.status === 'success' ? 'VPN 用户创建成功' : `创建失败：${result.message}`);
+            bootstrap.Modal.getInstance(document.getElementById('addVpnUserModal')).hide();
+            fetchVpnUsers();
+        }
+
+        function showAddVpnUserModal() {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('addVpnUserModal')).show();
+        }
+
+        function showBackupVpnUserModal(username) {
+            document.getElementById('backupVpnUsername').value = username;
+            document.getElementById('backupContent').value = '';
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('backupVpnUserModal')).show();
+        }
+
+        async function showEditVpnUserModal(username) {
+            document.getElementById('editVpnUsername').value = username;
+            const response = await fetch(`/api/vpn_users/edit/${username}`);
+            const data = await response.json();
+            if (data.status === 'success') {
+                document.getElementById('editVpnContent').value = data.content;
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('editVpnUserModal')).show();
+            } else {
+                alert(`无法加载配置文件：${data.message}`);
+            }
+        }
+
+        async function saveVpnUserConfig() {
+            const username = document.getElementById('editVpnUsername').value;
+            const content = document.getElementById('editVpnContent').value;
+            const response = await fetch(`/api/vpn_users/edit/${username}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            const result = await response.json();
+            alert(result.status === 'success' ? '配置文件保存成功' : `保存失败：${result.message}`);
+            if (result.status === 'success') {
+                bootstrap.Modal.getInstance(document.getElementById('editVpnUserModal')).hide();
+            }
+        }
+
+        function showChangePasswordModal() {
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('passwordError').textContent = '';
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('changePasswordModal')).show();
+        }
+
+        async function changePassword() {
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('passwordError');
+            
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                errorDiv.textContent = '请填写所有字段';
+                return;
+            }
+            
+            const response = await fetch('/api/change_password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_password: oldPassword, new_password: newPassword, confirm_password: confirmPassword })
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                alert('密码修改成功');
+                bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+            } else {
+                errorDiv.textContent = result.message;
+            }
+        }
+
+        // 初始加载
+        fetchDashboard();
+        fetchVpnUsers();
+        fetchConfigFiles();
+        fetchLogFiles();
+        fetchLogs();
+        fetchConnections();
+
+        // 自动刷新仪表盘
+        setInterval(fetchDashboard, 5000);
+    </script>
+</body>
