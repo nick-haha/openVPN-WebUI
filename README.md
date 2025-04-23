@@ -16,11 +16,12 @@
 
 确保系统已安装 Python 3.6+，然后执行：
 
-
+```bash
 pip install -r requirements.txt
 
 
 ###2️⃣ 配置环境变量
+
 在 config/ 目录下编辑 .env 文件
 
 ###3️⃣ 启动平台
