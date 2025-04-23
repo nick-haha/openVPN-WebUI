@@ -16,7 +16,7 @@
 
 确保系统已安装 Python 3.6+，然后执行：
 
-```bash
+
 pip install -r requirements.txt
 
 
@@ -25,21 +25,21 @@ pip install -r requirements.txt
 在 config/ 目录下编辑 .env 文件
 
 ###3️⃣ 启动平台
-```bash
+
 python bin/webui.py
 默认运行在：http://127.0.0.1:5000
 
 ##🛠️ OpenVPN 安装参考
 在使用本系统前，您需要先完成 OpenVPN 的安装。
 推荐使用以下脚本安装：
-```bash
+
 wget -O openvpn.sh https://get.vpnsetup.net/ovpn
 sudo bash openvpn.sh --auto
 安装完成后，即可使用本平台进行用户管理。
 
 ##🔐 重置管理员密码
 如果管理员密码遗忘，可以通过脚本重置：
-```bash
+
 python bin/reset_admin_password.py
 # 🖥️ 使用说明
 启动平台并访问：http://127.0.0.1:5000
